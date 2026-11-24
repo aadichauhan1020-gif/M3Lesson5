@@ -22,7 +22,36 @@ def detect_gesture(landmarks, handedness):
         if (handedness == "Right" and thumb_tip.x > thumb_ip.x) or (handedness == "Left" and thumb_tip.x < thumb_ip.x):
             fingers.append(1)
         return "scroll up" if sum(fingers) == 5 else "scroll down" if sum(fingers) == 0 else "no gesture"
-    cap=cv2.VideoCapture(0)
-    cap.set(3, Cam_width)
-    cap.set(4, Cam_height)
-    
+cap=cv2.VideoCapture(0)
+cap.set(3, Cam_width)
+cap.set(4, Cam_height)
+last_scroll = p_time = 0
+print("Gesture scroll controll Active\nOpen palm: scroll up\nClosed fist: scroll down\nPress 'q' to exit")
+while cap.isOpened():
+    success, img=cap.read()
+    if not success: break
+
+    img = cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 1)
+    results=hands.process(img)
+    gesture, handedness = "no gesture", "unknow"
+
+    if results.multi_hand_landmarks:
+        for hand, handedness_info in zip(results.multi_hand_landmarks, results.multi_handedness):
+            handedness = handedness_info.classification[0].label
+            gesture = detect_gesture(hand, handedness)
+            mp_drawings.draw_landmarks(img, hand, mp_hands.HAND_CONNECTIONS)
+            if(time.time() - last_scroll > SCROLL_DELAY):
+                if gesture == "scroll up":
+                    pyautogui.scroll(SCROLL_SPEED)
+                    last_scroll = time.time()
+                elif gesture == "scroll down":
+                    pyautogui.scroll(-SCROLL_SPEED)
+                    last_scroll = time.time()
+    fps = 1/(time.time() - p_time) if time.time() - p_time > 0 else 0
+    p_time = time.time()
+    cv2.putText(img, f"FPS: {int(fps)}' | Hand: {handedness} | Gesture: {gesture}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+    cv2.imshow("Gesture Control", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+cap.release()
+cap.destroyAllWindows()
